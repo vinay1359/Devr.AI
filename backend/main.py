@@ -14,6 +14,7 @@ from app.core.orchestration.queue_manager import AsyncQueueManager
 from app.database.weaviate.client import get_weaviate_client
 from integrations.discord.bot import DiscordBot
 from discord.ext import commands
+from routes import router as legacy_router
 # DevRel commands are now loaded dynamically (commented out below)
 # from integrations.discord.cogs import DevRelCommands
 
@@ -124,6 +125,7 @@ async def favicon():
     return Response(status_code=204)
 
 api.include_router(api_router)
+api.include_router(legacy_router, prefix="/api", tags=["Legacy"])
 
 
 if __name__ == "__main__":

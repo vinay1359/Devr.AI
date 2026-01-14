@@ -7,6 +7,8 @@ from app.core.events.enums import EventType, PlatformType
 from app.core.events.base import BaseEvent
 from app.core.handler.handler_registry import HandlerRegistry
 from pydantic import BaseModel
+from app.core.config import settings
+import httpx
 
 router = APIRouter()
 
@@ -34,6 +36,63 @@ def register_event_handlers():
     event_bus.register_handler(EventType.PR_UPDATED, sample_handler, PlatformType.GITHUB)
     event_bus.register_handler(EventType.PR_COMMENTED, sample_handler, PlatformType.GITHUB)
     event_bus.register_handler(EventType.PR_MERGED, sample_handler, PlatformType.GITHUB)
+
+@router.post("/repo-stats")
+async def get_repo_stats(request: RepoRequest):
+    """
+    Get repository statistics from GitHub
+    """
+    try:
+        # Parse repo URL to extract owner and repo name
+        repo_url = request.repo_url.rstrip('/')
+        parts = repo_url.split('github.com/')[-1].split('/')
+        if len(parts) < 2:
+            raise HTTPException(status_code=400, detail="Invalid GitHub repository URL")
+        
+        owner, repo = parts[0], parts[1]
+        
+        # Fetch repository stats from GitHub API
+        headers = {
+            "Authorization": f"token {settings.github_token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}",
+                headers=headers,
+                timeout=10.0
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"GitHub API error: {response.text}"
+                )
+            
+            repo_data = response.json()
+            
+            return {
+                "name": repo_data.get("name"),
+                "full_name": repo_data.get("full_name"),
+                "description": repo_data.get("description"),
+                "stars": repo_data.get("stargazers_count", 0),
+                "forks": repo_data.get("forks_count", 0),
+                "open_issues": repo_data.get("open_issues_count", 0),
+                "language": repo_data.get("language"),
+                "created_at": repo_data.get("created_at"),
+                "updated_at": repo_data.get("updated_at"),
+                "url": repo_data.get("html_url"),
+                "owner": {
+                    "login": repo_data.get("owner", {}).get("login"),
+                    "avatar_url": repo_data.get("owner", {}).get("avatar_url"),
+                }
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error fetching repo stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/github/webhook")
 async def github_webhook(request: Request):
