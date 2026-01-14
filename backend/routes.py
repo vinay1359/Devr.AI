@@ -44,14 +44,46 @@ async def get_repo_stats(request: RepoRequest):
     """
     try:
         # Parse repo URL to extract owner and repo name
-        repo_url = request.repo_url.rstrip('/')
-        parts = repo_url.split('github.com/')[-1].split('/')
-        if len(parts) < 2:
+        repo_url = request.repo_url.strip()
+        
+        # Handle SSH format (git@github.com:owner/repo.git)
+        if repo_url.startswith("git@"):
+            # Split on ':' to get the path part
+            if ":" in repo_url:
+                path = repo_url.split(":", 1)[1]
+            else:
+                raise HTTPException(status_code=400, detail="Invalid GitHub repository URL")
+        else:
+            # Ensure scheme is present
+            if not repo_url.startswith(("http://", "https://")):
+                repo_url = "https://" + repo_url
+            
+            # Extract path from URL
+            try:
+                # Parse URL to get path component
+                if "github.com/" in repo_url:
+                    path = repo_url.split("github.com/", 1)[1]
+                else:
+                    raise HTTPException(status_code=400, detail="Invalid GitHub repository URL")
+            except (IndexError, ValueError):
+                raise HTTPException(status_code=400, detail="Invalid GitHub repository URL")
+        
+        # Strip leading/trailing slashes and .git suffix
+        path = path.strip("/").removesuffix(".git")
+        
+        # Split into segments and validate
+        segments = path.split("/")
+        if len(segments) < 2:
             raise HTTPException(status_code=400, detail="Invalid GitHub repository URL")
         
-        owner, repo = parts[0], parts[1]
-        
-        # Fetch repository stats from GitHub API
+        owner, repo = segments[0], segments[1]
+                # Validate GitHub token is configured
+        if not settings.github_token:
+            raise HTTPException(
+                status_code=500,
+                detail="GitHub token not configured in environment variables. Please set GITHUB_TOKEN."
+            )
+                # Fetch repository stats from GitHub API
         headers = {
             "Authorization": f"token {settings.github_token}",
             "Accept": "application/vnd.github.v3+json"
@@ -65,9 +97,10 @@ async def get_repo_stats(request: RepoRequest):
             )
             
             if response.status_code != 200:
+                logging.error(f"GitHub API error: {response.status_code} - {response.text}")
                 raise HTTPException(
                     status_code=response.status_code,
-                    detail=f"GitHub API error: {response.text}"
+                    detail=f"GitHub API returned status {response.status_code}"
                 )
             
             repo_data = response.json()
