@@ -124,8 +124,8 @@ async def get_repo_stats(request: RepoRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error fetching repo stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.exception("Error fetching repo stats")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 @router.post("/github/webhook")
 async def github_webhook(request: Request):
