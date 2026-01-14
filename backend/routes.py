@@ -65,8 +65,8 @@ async def get_repo_stats(request: RepoRequest):
                     path = repo_url.split("github.com/", 1)[1]
                 else:
                     raise HTTPException(status_code=400, detail="Invalid GitHub repository URL")
-            except (IndexError, ValueError):
-                raise HTTPException(status_code=400, detail="Invalid GitHub repository URL")
+            except (IndexError, ValueError) as e:
+                raise HTTPException(status_code=400, detail="Invalid GitHub repository URL") from e
         
         # Strip leading/trailing slashes and .git suffix
         path = path.strip("/").removesuffix(".git")
