@@ -17,8 +17,9 @@ import httpx
 
 router = APIRouter()
 
-# GitHub identifier validation regex
-GITHUB_IDENTIFIER = re.compile(r'^[a-zA-Z0-9_-]+$')
+# GitHub identifier validation regexes (GitHub allows dots in repo names)
+GITHUB_OWNER = re.compile(r'^[a-zA-Z0-9_-]+$')
+GITHUB_REPO = re.compile(r'^[a-zA-Z0-9._-]+$')
 
 # Initialize rate limiter
 limiter = get_limiter()
@@ -51,7 +52,8 @@ def register_event_handlers():
 @router.post("/repo-stats")
 @limiter.limit("10/minute")
 async def get_repo_stats(
-    request: RepoRequest,
+    request: Request,
+    repo_request: RepoRequest,
     current_user: UUID = Depends(get_current_user)
 ):
     """
@@ -61,11 +63,9 @@ async def get_repo_stats(
     Cache: 5 minutes per repository
     Authentication: Required (Bearer token)
     """
-    limiter = get_limiter()
-    
     try:
         # Parse repo URL to extract owner and repo name
-        repo_url = request.repo_url.strip()
+        repo_url = repo_request.repo_url.strip()
         
         # Handle SSH format (git@github.com:owner/repo.git)
         if repo_url.startswith("git@"):
@@ -112,16 +112,16 @@ async def get_repo_stats(
         owner, repo = segments[0], segments[1]
         
         # Validate GitHub identifier format (owner and repo)
-        if not GITHUB_IDENTIFIER.match(owner):
+        if not GITHUB_OWNER.match(owner):
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid GitHub owner format: '{owner}'. Must contain only alphanumeric characters, hyphens, and underscores."
             )
         
-        if not GITHUB_IDENTIFIER.match(repo):
+        if not GITHUB_REPO.match(repo):
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid GitHub repository name format: '{repo}'. Must contain only alphanumeric characters, hyphens, and underscores."
+                detail=f"Invalid GitHub repository name format: '{repo}'. Must contain only alphanumeric characters, hyphens, dots, and underscores."
             )
         
         # Validate GitHub token is configured

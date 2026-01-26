@@ -69,12 +69,13 @@ class SimpleCache:
     def set(self, key: str, value: Any, ttl_seconds: int = 300) -> None:
         """Set value in cache with TTL."""
         with self._lock:
-            # Simple eviction: remove oldest 10% if at capacity
+            # Ensure at least 1 entry is removed when cache exceeds max_size
             if len(self._cache) >= self.max_size:
+                evict_count = max(1, int(self.max_size * 0.1))
                 old_keys = sorted(
                     self._cache.keys(),
                     key=lambda k: self._cache[k].created_at
-                )[:int(self.max_size * 0.1)]
+                )[:evict_count]
                 for old_key in old_keys:
                     del self._cache[old_key]
                 logger.debug(f"Cache evicted {len(old_keys)} old entries")

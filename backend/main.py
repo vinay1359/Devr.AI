@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi.exceptions import RateLimitExceeded as RateLimitException
 
@@ -108,13 +109,23 @@ async def lifespan(app: FastAPI):
 
 api = FastAPI(title="Devr.AI API", version="1.0", lifespan=lifespan)
 
-# Setup rate limiting
+# Setup rate limiting with proper error handler
 limiter = get_limiter()
 api.state.limiter = limiter
-api.add_exception_handler(RateLimitExceeded, lambda req, e: {
-    "detail": "Rate limit exceeded. Maximum 10 requests per minute per IP.",
-    "retry_after": 60
-})
+
+
+def rate_limit_exception_handler(request, exc):
+    """Handle rate limit exceptions with proper HTTP 429 response."""
+    return JSONResponse(
+        status_code=429,
+        content={
+            "detail": "Rate limit exceeded. Maximum 10 requests per minute per IP.",
+            "retry_after": 60
+        }
+    )
+
+
+api.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)
 
 # Configure CORS
 api.add_middleware(
@@ -126,8 +137,8 @@ api.add_middleware(
         "http://127.0.0.1:3000",
     ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 @api.get("/favicon.ico")
