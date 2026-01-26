@@ -6,11 +6,14 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi.exceptions import RateLimitExceeded as RateLimitException
 
 from app.api.router import api_router
 from app.core.config import settings
 from app.core.orchestration.agent_coordinator import AgentCoordinator
 from app.core.orchestration.queue_manager import AsyncQueueManager
+from app.core.rate_limiter import get_limiter
 from app.database.weaviate.client import get_weaviate_client
 from integrations.discord.bot import DiscordBot
 from discord.ext import commands
@@ -104,6 +107,14 @@ async def lifespan(app: FastAPI):
 
 
 api = FastAPI(title="Devr.AI API", version="1.0", lifespan=lifespan)
+
+# Setup rate limiting
+limiter = get_limiter()
+api.state.limiter = limiter
+api.add_exception_handler(RateLimitExceeded, lambda req, e: {
+    "detail": "Rate limit exceeded. Maximum 10 requests per minute per IP.",
+    "retry_after": 60
+})
 
 # Configure CORS
 api.add_middleware(

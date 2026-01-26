@@ -33,8 +33,11 @@ class DevRelCommands(commands.Cog):
         self.cleanup_expired_tokens.start()
 
     def cog_unload(self):
-        if self.cleanup_expired_tokens.is_running():
-            self.cleanup_expired_tokens.cancel()
+        try:
+            if self.cleanup_expired_tokens.is_running():
+                self.cleanup_expired_tokens.cancel()
+        except Exception as e:
+            logger.warning(f"Error cancelling cleanup task: {type(e).__name__}")
 
     @tasks.loop(minutes=5)
     async def cleanup_expired_tokens(self):
