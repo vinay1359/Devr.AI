@@ -2,6 +2,7 @@ import asyncio
 import uuid
 import logging
 import re
+from urllib.parse import urlparse
 from fastapi import APIRouter, Request, HTTPException, Depends
 from uuid import UUID
 from app.core.events.event_bus import EventBus
@@ -82,17 +83,21 @@ async def get_repo_stats(
             if not repo_url.startswith(("http://", "https://")):
                 repo_url = "https://" + repo_url
             
-            # Extract path from URL
+            # Parse URL to extract path (excludes query strings and fragments)
             try:
-                # Parse URL to get path component
-                if "github.com/" in repo_url:
-                    path = repo_url.split("github.com/", 1)[1]
-                else:
+                parsed_url = urlparse(repo_url)
+                
+                # Verify it's a GitHub URL
+                if "github.com" not in parsed_url.netloc:
                     raise HTTPException(
                         status_code=400,
                         detail="Invalid GitHub repository URL: must be from github.com"
                     )
-            except (IndexError, ValueError):
+                
+                # Get path from parsed URL (excludes query string and fragment)
+                path = parsed_url.path
+                
+            except (ValueError, AttributeError):
                 raise HTTPException(
                     status_code=400,
                     detail="Invalid GitHub repository URL format"
